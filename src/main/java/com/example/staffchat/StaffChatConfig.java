@@ -108,7 +108,7 @@ public final class StaffChatConfig {
 
     public void sanitize() {
         width = clamp(width, 80, 600);
-        maxLines = clamp(maxLines, 1, 30);
+        maxLines = clamp(maxLines, 1, 16);
         scale = Math.max(0.5f, Math.min(2.5f, scale));
         bgOpacity = clamp(bgOpacity, 0, 255);
         fadeTicks = clamp(fadeTicks, 40, 6000);

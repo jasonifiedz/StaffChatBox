@@ -53,7 +53,7 @@ public class StaffChatSettingsScreen extends Screen {
         addRenderableWidget(new OptionSlider(panelX, y, w, h, 0, 255, 5, cfg.bgOpacity,
                 v -> "BG Opacity: " + (int) (double) v, v -> cfg.bgOpacity = (int) Math.round(v)));
         y += rowH;
-        addRenderableWidget(new OptionSlider(panelX, y, w, h, 1, 30, 1, cfg.maxLines,
+        addRenderableWidget(new OptionSlider(panelX, y, w, h, 1, 16, 1, cfg.maxLines,
                 v -> "Max Lines: " + (int) (double) v, v -> cfg.maxLines = (int) Math.round(v)));
         y += rowH;
         addRenderableWidget(new OptionSlider(panelX, y, w, h, 80, 600, 5, cfg.width,
@@ -182,7 +182,7 @@ public class StaffChatSettingsScreen extends Screen {
             int scaledH = (int) (mouseY - cfg.posY);
             cfg.width = clamp(Math.round(scaledW / scale) - pad * 2, 80, 600);
             int linesPx = Math.round(scaledH / scale) - headerH - pad;
-            cfg.maxLines = clamp(Math.round(linesPx / (float) lineHeight), 1, 30);
+            cfg.maxLines = clamp(Math.round(linesPx / (float) lineHeight), 1, 16);
             return true;
         }
         return super.mouseDragged(event, dragX, dragY);
