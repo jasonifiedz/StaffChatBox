@@ -3,6 +3,8 @@ package com.example.staffchat;
 import java.util.ArrayList;
 import java.util.List;
 
+import org.lwjgl.glfw.GLFW;
+
 import net.fabricmc.fabric.api.client.screen.v1.ScreenEvents;
 import net.fabricmc.fabric.api.client.screen.v1.ScreenKeyboardEvents;
 import net.fabricmc.fabric.api.client.screen.v1.ScreenMouseEvents;
@@ -20,21 +22,30 @@ import net.minecraft.util.FormattedCharSequence;
  * Injects a second, separate staff-chat box into the vanilla chat screen. When you press T,
  * the normal chat input is there as always, AND a staff panel appears (its own search box,
  * scrollable log, and its own input that sends to staff chat via /sc). Two boxes, both typeable,
- * fully independent. Built on fabric-screen-api-v1 — no mixins.
+ * fully independent. The panel can be dragged by its title bar to reposition it (the position is
+ * shared with the settings preview and the passive HUD box). Built on fabric-screen-api-v1.
  */
 public final class StaffChatOverlay {
 
     private static final int KEY_ENTER = 257;
     private static final int KEY_NUMPAD_ENTER = 335;
+    private static final int SEARCH_H = 14;
+    private static final int INPUT_H = 14;
+    private static final int GAP = 2;
 
     private static EditBox searchBox;
     private static EditBox staffInput;
     private static int scrollPixels = 0;
     private static ChatScreen currentChat = null;
 
-    // Panel geometry, recomputed each (re)init.
-    private static int ax, ay, pw;
-    private static int searchYTop, logX, logY, logW, logH, inputYTop, panelBottom;
+    // Panel geometry (pw/logH/panelH persist; the rest are derived by layout()).
+    private static int ax, ay, pw, logH, panelH;
+    private static int searchYTop, logX, logY, logW, inputYTop, panelBottom;
+
+    // Title-bar drag state.
+    private static boolean dragging = false;
+    private static boolean wasMouseDown = false;
+    private static double grabDx, grabDy;
 
     private StaffChatOverlay() {
     }
@@ -55,33 +66,22 @@ public final class StaffChatOverlay {
         StaffChatConfig cfg = StaffChatConfig.get();
         Font font = client.font;
         int lineHeight = font.lineHeight + 1;
+        int headerH = font.lineHeight + 2;
 
         pw = Math.max(120, Math.min(cfg.width, w - 8));
         int rows = Math.max(4, Math.min(cfg.maxLines, 16));
-        int searchH = 14;
-        int inputH = 14;
-        int gap = 2;
-        int headerH = font.lineHeight + 2;
-
         logH = rows * lineHeight;
-        int panelH = headerH + searchH + gap + logH + gap + inputH + 4;
+        panelH = headerH + SEARCH_H + GAP + logH + GAP + INPUT_H + 4;
 
         ax = clamp(cfg.posX, 2, Math.max(2, w - pw - 2));
         ay = clamp(cfg.posY, 2, Math.max(2, h - panelH - 2));
 
-        searchYTop = ay + headerH;
-        logX = ax;
-        logY = searchYTop + searchH + gap;
-        logW = pw;
-        inputYTop = logY + logH + gap;
-        panelBottom = inputYTop + inputH + 2;
-
-        searchBox = new EditBox(font, ax + 1, searchYTop, pw - 2, searchH, Component.literal("Search"));
+        searchBox = new EditBox(font, ax + 1, ay, pw - 2, SEARCH_H, Component.literal("Search"));
         searchBox.setHint(Component.literal("Search staff chat..."));
         searchBox.setMaxLength(128);
         searchBox.setResponder(s -> scrollPixels = 0);
 
-        staffInput = new EditBox(font, ax + 1, inputYTop, pw - 2, inputH, Component.literal("Message staff"));
+        staffInput = new EditBox(font, ax + 1, ay, pw - 2, INPUT_H, Component.literal("Message staff"));
         staffInput.setHint(Component.literal("Message staff..."));
         staffInput.setMaxLength(256);
 
@@ -89,17 +89,72 @@ public final class StaffChatOverlay {
         widgets.add(searchBox);
         widgets.add(staffInput);
 
+        layout(ax, ay);
         scrollPixels = 0;
+        dragging = false;
 
         // Register per-screen callbacks once per screen instance (init also fires on resize).
         ChatScreen prev = currentChat;
         currentChat = screen;
         if (prev != screen) {
-            ScreenEvents.beforeRender(screen).register((s, g, mx, my, td) -> drawBackground(g));
+            ScreenEvents.beforeRender(screen).register((s, g, mx, my, td) -> {
+                handleDrag(mx, my);
+                drawBackground(g);
+            });
             ScreenEvents.afterRender(screen).register((s, g, mx, my, td) -> drawForeground(g));
             ScreenKeyboardEvents.allowKeyPress(screen).register((s, key, sc, mods) -> onKey(key));
             ScreenMouseEvents.allowMouseScroll(screen).register((s, mx, my, hor, ver) -> onScroll(mx, my, ver));
         }
+    }
+
+    /** Positions all geometry (and the two edit boxes) for the given top-left anchor. */
+    private static void layout(int newAx, int newAy) {
+        Font font = Minecraft.getInstance().font;
+        int headerH = font.lineHeight + 2;
+        ax = newAx;
+        ay = newAy;
+        searchYTop = ay + headerH;
+        logX = ax;
+        logW = pw;
+        logY = searchYTop + SEARCH_H + GAP;
+        inputYTop = logY + logH + GAP;
+        panelBottom = inputYTop + INPUT_H + 2;
+        if (searchBox != null) {
+            searchBox.setX(ax + 1);
+            searchBox.setY(searchYTop);
+        }
+        if (staffInput != null) {
+            staffInput.setX(ax + 1);
+            staffInput.setY(inputYTop);
+        }
+    }
+
+    /** Drags the panel when the left mouse button is held over its title bar. */
+    private static void handleDrag(int mouseX, int mouseY) {
+        Minecraft mc = Minecraft.getInstance();
+        long window = mc.getWindow().getWindow();
+        boolean down = GLFW.glfwGetMouseButton(window, GLFW.GLFW_MOUSE_BUTTON_LEFT) == GLFW.GLFW_PRESS;
+        int gw = mc.getWindow().getGuiScaledWidth();
+        int gh = mc.getWindow().getGuiScaledHeight();
+
+        if (down && !wasMouseDown
+                && mouseX >= ax && mouseX <= ax + pw && mouseY >= ay && mouseY < searchYTop) {
+            dragging = true;
+            grabDx = mouseX - ax;
+            grabDy = mouseY - ay;
+        }
+        if (dragging && down) {
+            int nx = clamp((int) Math.round(mouseX - grabDx), 2, Math.max(2, gw - pw - 2));
+            int ny = clamp((int) Math.round(mouseY - grabDy), 2, Math.max(2, gh - panelH - 2));
+            StaffChatConfig.get().posX = nx;
+            StaffChatConfig.get().posY = ny;
+            layout(nx, ny);
+        }
+        if (!down && wasMouseDown && dragging) {
+            dragging = false;
+            StaffChatConfig.get().save();
+        }
+        wasMouseDown = down;
     }
 
     /**
@@ -165,8 +220,11 @@ public final class StaffChatOverlay {
         Font font = Minecraft.getInstance().font;
         int lineHeight = font.lineHeight + 1;
 
+        // Title doubles as the drag handle; the grip hint makes that discoverable.
         g.drawString(font, Component.literal("Staff Chat")
                 .withStyle(s -> s.withColor(0x4DD1CC).withBold(true)), ax + 1, ay, 0xFFFFFFFF);
+        g.drawString(font, Component.literal("☰ drag")
+                .withStyle(s -> s.withColor(0x777777)), ax + pw - 34, ay, 0xFF777777);
 
         String q = searchBox != null ? searchBox.getValue() : "";
         if (!q.isBlank()) {
