@@ -31,7 +31,7 @@ public class StaffChatClient implements ClientModInitializer {
                 "key.staffchatbox.open_staff",
                 InputConstants.Type.KEYSYM,
                 GLFW.GLFW_KEY_I,
-                "category.staffchatbox"));
+                KeyMapping.Category.MISC));
 
         // Divert staff messages out of the main chat (unless mirroring is enabled).
         ClientReceiveMessageEvents.ALLOW_GAME.register((message, overlay) -> {

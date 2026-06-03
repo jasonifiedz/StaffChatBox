@@ -7,6 +7,7 @@ import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.client.gui.screens.Screen;
+import net.minecraft.client.input.MouseButtonEvent;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.MutableComponent;
 
@@ -140,8 +141,11 @@ public class StaffChatSettingsScreen extends Screen {
     // ----- dragging / resizing the preview -----
 
     @Override
-    public boolean mouseClicked(double mouseX, double mouseY, int button) {
-        if (super.mouseClicked(mouseX, mouseY, button)) {
+    public boolean mouseClicked(MouseButtonEvent event, boolean doubleClick) {
+        double mouseX = event.x();
+        double mouseY = event.y();
+        int button = event.button();
+        if (super.mouseClicked(event, doubleClick)) {
             return true;
         }
         if (button == 0) {
@@ -161,7 +165,9 @@ public class StaffChatSettingsScreen extends Screen {
     }
 
     @Override
-    public boolean mouseDragged(double mouseX, double mouseY, int button, double dragX, double dragY) {
+    public boolean mouseDragged(MouseButtonEvent event, double dragX, double dragY) {
+        double mouseX = event.x();
+        double mouseY = event.y();
         if (this.dragMode == DRAG_MOVE) {
             cfg.posX = clamp((int) Math.round(mouseX - grabDx), 0, this.width - 10);
             cfg.posY = clamp((int) Math.round(mouseY - grabDy), 0, this.height - 10);
@@ -179,18 +185,18 @@ public class StaffChatSettingsScreen extends Screen {
             cfg.maxLines = clamp(Math.round(linesPx / (float) lineHeight), 1, 30);
             return true;
         }
-        return super.mouseDragged(mouseX, mouseY, button, dragX, dragY);
+        return super.mouseDragged(event, dragX, dragY);
     }
 
     @Override
-    public boolean mouseReleased(double mouseX, double mouseY, int button) {
+    public boolean mouseReleased(MouseButtonEvent event) {
         boolean wasDragging = this.dragMode != DRAG_NONE;
         this.dragMode = DRAG_NONE;
         if (wasDragging) {
             cfg.sanitize();
             rebuildWidgets(); // resync the Width / Max Lines sliders
         }
-        return super.mouseReleased(mouseX, mouseY, button);
+        return super.mouseReleased(event);
     }
 
     // ----- rendering -----

@@ -1,6 +1,6 @@
 # Staff Chat Box
 
-A **client-side** Fabric mod for Minecraft **1.21.8** that pulls
+A **client-side** Fabric mod for Minecraft **1.21.11** that pulls
 [StaffChat](../plugins/StaffChat/) messages out of the main chat and shows them in a
 separate chat box in the top-left of the screen, with a quick-reply screen.
 
@@ -68,8 +68,8 @@ Output jar: `build/libs/staffchatbox-1.0.0.jar`.
 
 ## Install
 
-1. Install [Fabric Loader](https://fabricmc.net/use/installer/) for 1.21.8.
-2. Drop **[Fabric API](https://modrinth.com/mod/fabric-api)** (1.21.8) into `.minecraft/mods/`.
+1. Install [Fabric Loader](https://fabricmc.net/use/installer/) for 1.21.11.
+2. Drop **[Fabric API](https://modrinth.com/mod/fabric-api)** (1.21.11) into `.minecraft/mods/`.
 3. Drop **[ModMenu](https://modrinth.com/mod/modmenu)** into `.minecraft/mods/` (for the
    Configure button — optional but recommended).
 4. Drop `staffchatbox-1.0.0.jar` into `.minecraft/mods/`.
@@ -82,5 +82,5 @@ Most tuning happens in-game via the settings screen and persists to
 `config/staffchatbox.json`. Defaults and detection signatures live in `StaffChatConfig.java`.
 
 > If Gradle can't resolve dependencies, bump `loader_version` / `fabric_version` in
-> `gradle.properties` to the current 1.21.8 builds listed at
+> `gradle.properties` to the current 1.21.11 builds listed at
 > <https://fabricmc.net/develop/>.

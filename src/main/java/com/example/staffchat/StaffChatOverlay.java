@@ -97,7 +97,7 @@ public final class StaffChatOverlay {
         if (prev != screen) {
             ScreenEvents.beforeRender(screen).register((s, g, mx, my, td) -> drawBackground(g));
             ScreenEvents.afterRender(screen).register((s, g, mx, my, td) -> drawForeground(g));
-            ScreenKeyboardEvents.allowKeyPress(screen).register((s, key, sc, mods) -> onKey(key));
+            ScreenKeyboardEvents.allowKeyPress(screen).register((s, keyEvent) -> onKey(keyEvent.key()));
             ScreenMouseEvents.allowMouseScroll(screen).register((s, mx, my, hor, ver) -> onScroll(mx, my, ver));
         }
     }
@@ -107,7 +107,7 @@ public final class StaffChatOverlay {
      * typing a staff message. Falls back to plain chat if the panel is disabled.
      */
     public static void openStaffChat(Minecraft client) {
-        client.setScreen(new ChatScreen(""));
+        client.setScreen(new ChatScreen("", false));
         if (StaffChatConfig.get().enabled && currentChat != null && staffInput != null) {
             currentChat.setFocused(staffInput);
         }
