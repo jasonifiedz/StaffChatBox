@@ -1,0 +1,6 @@
+{
+  "key.staffchatbox.open_staff": "Open staff chat (focus input)",
+  "category.staffchatbox": "Staff Chat Box",
+  "modmenu.nameTranslation.staffchatbox": "Staff Chat Box",
+  "modmenu.descriptionTranslation.staffchatbox": "Adds a separate staff-chat box. Press T (or the staff-chat hotkey) for two boxes — normal chat and staff chat — each with its own input. Staff messages are pulled out of the main chat. Configure via the Configure button."
+}

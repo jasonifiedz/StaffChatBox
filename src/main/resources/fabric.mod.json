@@ -1,0 +1,27 @@
+{
+  "schemaVersion": 1,
+  "id": "staffchatbox",
+  "version": "${version}",
+  "name": "Staff Chat Box",
+  "description": "Client-side mod that pulls StaffChat messages out of the main chat and shows them in a separate chat box, with a quick-reply screen.",
+  "authors": [
+    "jasonz"
+  ],
+  "license": "MIT",
+  "icon": "assets/staffchatbox/icon.png",
+  "environment": "client",
+  "entrypoints": {
+    "client": [
+      "com.example.staffchat.StaffChatClient"
+    ],
+    "modmenu": [
+      "com.example.staffchat.ModMenuIntegration"
+    ]
+  },
+  "depends": {
+    "fabricloader": ">=0.16.0",
+    "minecraft": "~1.21.8",
+    "java": ">=21",
+    "fabric-api": "*"
+  }
+}

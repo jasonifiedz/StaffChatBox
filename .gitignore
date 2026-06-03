@@ -1,0 +1,20 @@
+# Gradle / build output
+.gradle/
+build/
+out/
+
+# Fabric Loom dev run directory (worlds, logs, configs — may contain local paths)
+run/
+run_client.log
+nohup.out
+
+# IDE
+.idea/
+*.iml
+.vscode/
+*.classpath
+*.project
+
+# OS
+.DS_Store
+Thumbs.db
