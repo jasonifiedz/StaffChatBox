@@ -22,8 +22,11 @@ import net.minecraft.util.FormattedCharSequence;
  * Injects a second, separate staff-chat box into the vanilla chat screen. When you press T,
  * the normal chat input is there as always, AND a staff panel appears (its own search box,
  * scrollable log, and its own input that sends to staff chat via /sc). Two boxes, both typeable,
- * fully independent. The panel can be dragged by its title bar to reposition it (the position is
- * shared with the settings preview and the passive HUD box). Built on fabric-screen-api-v1.
+ * fully independent. The panel can be dragged by its title bar.
+ *
+ * <p>The log hugs its content (top under the title, newest at the bottom) so it lines up exactly
+ * with the passive HUD box — opening/closing chat doesn't make messages jump. Search and input
+ * sit below the log. Built on fabric-screen-api-v1 (no mixins).
  */
 public final class StaffChatOverlay {
 
@@ -35,12 +38,13 @@ public final class StaffChatOverlay {
 
     private static EditBox searchBox;
     private static EditBox staffInput;
-    private static int scrollPixels = 0;
+    private static int scrollLines = 0; // 0 = pinned to the newest line
     private static ChatScreen currentChat = null;
+    private static List<FormattedCharSequence> cachedLines = new ArrayList<>();
 
-    // Panel geometry (pw/logH/panelH persist; the rest are derived by layout()).
-    private static int ax, ay, pw, logH, panelH;
-    private static int searchYTop, logX, logY, logW, inputYTop, panelBottom;
+    // Panel geometry. ax/ay/pw/maxRows/panelH persist; the rest are derived per frame.
+    private static int ax, ay, pw, maxRows, panelH;
+    private static int logX, logY, logW, logH, panelBottom;
 
     // Title-bar drag state.
     private static boolean dragging = false;
@@ -69,9 +73,8 @@ public final class StaffChatOverlay {
         int headerH = font.lineHeight + 2;
 
         pw = Math.max(120, Math.min(cfg.width, w - 8));
-        int rows = Math.max(4, Math.min(cfg.maxLines, 16));
-        logH = rows * lineHeight;
-        panelH = headerH + SEARCH_H + GAP + logH + GAP + INPUT_H + 4;
+        maxRows = Math.max(1, cfg.maxLines);
+        panelH = headerH + maxRows * lineHeight + GAP + SEARCH_H + GAP + INPUT_H + 4;
 
         ax = clamp(cfg.posX, 2, Math.max(2, w - pw - 2));
         ay = clamp(cfg.posY, 2, Math.max(2, h - panelH - 2));
@@ -79,7 +82,7 @@ public final class StaffChatOverlay {
         searchBox = new EditBox(font, ax + 1, ay, pw - 2, SEARCH_H, Component.literal("Search"));
         searchBox.setHint(Component.literal("Search staff chat..."));
         searchBox.setMaxLength(128);
-        searchBox.setResponder(s -> scrollPixels = 0);
+        searchBox.setResponder(s -> scrollLines = 0);
 
         staffInput = new EditBox(font, ax + 1, ay, pw - 2, INPUT_H, Component.literal("Message staff"));
         staffInput.setHint(Component.literal("Message staff..."));
@@ -89,8 +92,9 @@ public final class StaffChatOverlay {
         widgets.add(searchBox);
         widgets.add(staffInput);
 
-        layout(ax, ay);
-        scrollPixels = 0;
+        cachedLines = wrappedLines();
+        recomputeGeometry();
+        scrollLines = 0;
         dragging = false;
 
         // Register per-screen callbacks once per screen instance (init also fires on resize).
@@ -98,7 +102,9 @@ public final class StaffChatOverlay {
         currentChat = screen;
         if (prev != screen) {
             ScreenEvents.beforeRender(screen).register((s, g, mx, my, td) -> {
+                cachedLines = wrappedLines();
                 handleDrag(mx, my);
+                recomputeGeometry();
                 drawBackground(g);
             });
             ScreenEvents.afterRender(screen).register((s, g, mx, my, td) -> drawForeground(g));
@@ -107,25 +113,30 @@ public final class StaffChatOverlay {
         }
     }
 
-    /** Positions all geometry (and the two edit boxes) for the given top-left anchor. */
-    private static void layout(int newAx, int newAy) {
+    /** Sizes the log to its content (capped at maxRows) and positions the boxes below it. */
+    private static void recomputeGeometry() {
         Font font = Minecraft.getInstance().font;
+        int lineHeight = font.lineHeight + 1;
         int headerH = font.lineHeight + 2;
-        ax = newAx;
-        ay = newAy;
-        searchYTop = ay + headerH;
+
+        int rowsToShow = Math.min(Math.max(cachedLines.size(), 1), maxRows);
         logX = ax;
         logW = pw;
-        logY = searchYTop + SEARCH_H + GAP;
-        inputYTop = logY + logH + GAP;
-        panelBottom = inputYTop + INPUT_H + 2;
+        logY = ay + headerH;
+        logH = rowsToShow * lineHeight;
+        int searchY = logY + logH + GAP;
+        int inputY = searchY + SEARCH_H + GAP;
+        panelBottom = inputY + INPUT_H + 2;
+
         if (searchBox != null) {
             searchBox.setX(ax + 1);
-            searchBox.setY(searchYTop);
+            searchBox.setY(searchY);
+            searchBox.setWidth(pw - 2);
         }
         if (staffInput != null) {
             staffInput.setX(ax + 1);
-            staffInput.setY(inputYTop);
+            staffInput.setY(inputY);
+            staffInput.setWidth(pw - 2);
         }
     }
 
@@ -138,17 +149,16 @@ public final class StaffChatOverlay {
         int gh = mc.getWindow().getGuiScaledHeight();
 
         if (down && !wasMouseDown
-                && mouseX >= ax && mouseX <= ax + pw && mouseY >= ay && mouseY < searchYTop) {
+                && mouseX >= ax && mouseX <= ax + pw && mouseY >= ay && mouseY < ay + (mc.font.lineHeight + 2)) {
             dragging = true;
             grabDx = mouseX - ax;
             grabDy = mouseY - ay;
         }
         if (dragging && down) {
-            int nx = clamp((int) Math.round(mouseX - grabDx), 2, Math.max(2, gw - pw - 2));
-            int ny = clamp((int) Math.round(mouseY - grabDy), 2, Math.max(2, gh - panelH - 2));
-            StaffChatConfig.get().posX = nx;
-            StaffChatConfig.get().posY = ny;
-            layout(nx, ny);
+            ax = clamp((int) Math.round(mouseX - grabDx), 2, Math.max(2, gw - pw - 2));
+            ay = clamp((int) Math.round(mouseY - grabDy), 2, Math.max(2, gh - panelH - 2));
+            StaffChatConfig.get().posX = ax;
+            StaffChatConfig.get().posY = ay;
         }
         if (!down && wasMouseDown && dragging) {
             dragging = false;
@@ -188,14 +198,15 @@ public final class StaffChatOverlay {
             mc.player.connection.sendCommand(StaffChatConfig.get().command + " " + text);
         }
         staffInput.setValue("");
+        scrollLines = 0;
         mc.setScreen(null); // close chat like vanilla so the player can move again
     }
 
     private static boolean onScroll(double mx, double my, double verticalAmount) {
         if (mx >= logX && mx <= logX + logW && my >= logY && my <= logY + logH) {
-            int lineHeight = Minecraft.getInstance().font.lineHeight + 1;
-            int total = wrappedLines().size() * lineHeight;
-            scrollPixels = clamp((int) (scrollPixels + verticalAmount * lineHeight * 3), 0, Math.max(0, total - logH));
+            int total = cachedLines.size();
+            int visible = Math.min(total, maxRows);
+            scrollLines = clamp(scrollLines + (int) Math.round(verticalAmount), 0, Math.max(0, total - visible));
             return false; // consume so the vanilla chat doesn't scroll too
         }
         return true;
@@ -206,7 +217,7 @@ public final class StaffChatOverlay {
         List<FormattedCharSequence> lines = new ArrayList<>();
         String q = searchBox != null ? searchBox.getValue() : "";
         for (StaffChatHistory.Entry e : StaffChatHistory.search(q)) {
-            lines.addAll(font.split(StaffChatFormat.withTimestamp(e), logW - 6));
+            lines.addAll(font.split(StaffChatFormat.withTimestamp(e), Math.max(10, pw - 8)));
         }
         return lines;
     }
@@ -223,8 +234,7 @@ public final class StaffChatOverlay {
         // Title doubles as the drag handle; the grip hint makes that discoverable.
         g.drawString(font, Component.literal("Staff Chat")
                 .withStyle(s -> s.withColor(0x4DD1CC).withBold(true)), ax + 1, ay, 0xFFFFFFFF);
-        g.drawString(font, Component.literal("☰ drag")
-                .withStyle(s -> s.withColor(0x777777)), ax + pw - 34, ay, 0xFF777777);
+        g.drawString(font, Component.literal("☰ drag"), ax + pw - 34, ay, 0xFF777777);
 
         String q = searchBox != null ? searchBox.getValue() : "";
         if (!q.isBlank()) {
@@ -233,30 +243,32 @@ public final class StaffChatOverlay {
                     ax + 64, ay, 0xFFFFFF55);
         }
 
-        List<FormattedCharSequence> lines = wrappedLines();
-        int total = lines.size() * lineHeight;
-        scrollPixels = clamp(scrollPixels, 0, Math.max(0, total - logH));
+        int total = cachedLines.size();
+        int visible = Math.min(total, maxRows);
+        scrollLines = clamp(scrollLines, 0, Math.max(0, total - visible));
 
+        if (total == 0) {
+            String msg = q.isBlank() ? "No staff messages yet." : "No matches.";
+            g.drawString(font, Component.literal(msg), logX + 3, logY + 2, 0xFF888888);
+            return;
+        }
+
+        // Show a window of `visible` lines ending `scrollLines` above the newest, top-anchored.
+        int startIdx = total - visible - scrollLines;
         g.enableScissor(logX, logY, logX + logW, logY + logH);
-        int y = (logY + logH) - total + scrollPixels;
-        for (FormattedCharSequence line : lines) {
-            if (y + lineHeight >= logY && y <= logY + logH) {
-                g.drawString(font, line, logX + 3, y, 0xFFFFFFFF);
-            }
+        int y = logY;
+        for (int i = startIdx; i < startIdx + visible; i++) {
+            g.drawString(font, cachedLines.get(i), logX + 3, y, 0xFFFFFFFF);
             y += lineHeight;
         }
         g.disableScissor();
 
-        if (lines.isEmpty()) {
-            String msg = q.isBlank() ? "No staff messages yet." : "No matches.";
-            g.drawString(font, Component.literal(msg), logX + 3, logY + 2, 0xFF888888);
-        }
-
-        int max = Math.max(0, total - logH);
-        if (max > 0) {
+        // Scrollbar (only when there's more history than fits).
+        if (total > visible) {
             int trackX = logX + logW - 3;
-            int thumbH = Math.max(12, (int) ((logH / (float) total) * logH));
-            int thumbY = (int) (logY + (1.0 - scrollPixels / (float) max) * (logH - thumbH));
+            int thumbH = Math.max(8, (int) ((float) visible / total * logH));
+            float p = (float) scrollLines / (total - visible); // 0 = newest (bottom)
+            int thumbY = (int) (logY + (1.0f - p) * (logH - thumbH));
             g.fill(trackX, logY, trackX + 3, logY + logH, 0x55000000);
             g.fill(trackX, thumbY, trackX + 3, thumbY + thumbH, 0xFFAAAAAA);
         }

@@ -42,15 +42,20 @@ public final class StaffChatHud {
         boolean screenOpen = mc.screen != null;
         long now = StaffChatHistory.currentTick();
 
-        List<Component> messages = new ArrayList<>();
-        for (StaffChatHistory.Entry entry : StaffChatHistory.snapshot()) {
-            if (!screenOpen && now - entry.tick() > cfg.fadeTicks) {
-                continue;
-            }
-            messages.add(StaffChatFormat.withTimestamp(entry));
-        }
-        if (messages.isEmpty()) {
+        List<StaffChatHistory.Entry> entries = StaffChatHistory.snapshot();
+        if (entries.isEmpty()) {
             return;
+        }
+        // Hide the whole box once the most recent message has aged out (keeps the box's contents
+        // identical to the chat-screen panel whenever it IS shown, so nothing jumps on open).
+        long newestAge = now - entries.get(entries.size() - 1).tick();
+        if (!screenOpen && newestAge > cfg.fadeTicks) {
+            return;
+        }
+
+        List<Component> messages = new ArrayList<>();
+        for (StaffChatHistory.Entry entry : entries) {
+            messages.add(StaffChatFormat.withTimestamp(entry));
         }
 
         int screenW = mc.getWindow().getGuiScaledWidth();
